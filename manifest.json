@@ -1,0 +1,17 @@
+{
+  "name": "مسيّر الميزانية الشخصية",
+  "short_name": "الميزانية",
+  "description": "تطبيق تسيير الميزانية الشخصية - خطة سداد الدين والخطة الدائمة",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f6f5f1",
+  "theme_color": "#0f766e",
+  "dir": "rtl",
+  "lang": "ar",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
