@@ -78,6 +78,7 @@ footer{text-align:center;color:var(--sub);font-size:11.5px;margin:18px 0 8px}
 <div class="tabs no-print">
   <div class="tab active" data-tab="debt">📉 خطة سداد الدين (مؤقتة)</div>
   <div class="tab" data-tab="perm">🏠 الخطة الدائمة</div>
+  <div class="tab" data-tab="expenses">📝 النفقات الفعلية</div>
   <div class="tab" data-tab="report">📊 التقرير الشهري</div>
 </div>
 
@@ -171,6 +172,53 @@ footer{text-align:center;color:var(--sub);font-size:11.5px;margin:18px 0 8px}
   </div>
 </div>
 
+<!-- ================= ACTUAL DAILY EXPENSES ================= -->
+<div id="tab-expenses" class="tabview" style="display:none">
+  <div class="card">
+    <h2>➕ تسجيل نفقة يومية</h2>
+    <div class="row"><label>التاريخ</label><input type="date" id="e_date"></div>
+    <div class="row"><label>الباب</label>
+      <select id="e_cat" style="padding:6px 8px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-size:13px">
+        <option value="home">المنزل</option>
+        <option value="bread">خبز ومخبوزات</option>
+        <option value="grocery">مواد غذائية</option>
+        <option value="veg">خضر</option>
+        <option value="meat">لحم</option>
+        <option value="drinks">مشروبات</option>
+        <option value="transport">نقل</option>
+        <option value="cafe">مقهى</option>
+        <option value="school">أدوات دراسية</option>
+      </select>
+    </div>
+    <div class="row"><label>المبلغ</label><input type="number" id="e_amount" placeholder="0"></div>
+    <div class="row"><label>ملاحظة (اختياري)</label><input type="text" id="e_note" style="width:160px" placeholder="مثال: سوق الجمعة"></div>
+    <div class="btnrow"><button class="btn primary" onclick="addExpense()">إضافة النفقة</button></div>
+  </div>
+
+  <div class="card">
+    <h2>🗓️ شهر التتبع</h2>
+    <div class="row"><label>الشهر المعروض</label><input type="month" id="e_month"></div>
+  </div>
+
+  <div class="card">
+    <h2>📋 نفقات هذا الشهر</h2>
+    <div id="e_list" class="muted">لا توجد نفقات مسجّلة لهذا الشهر.</div>
+    <div class="stat" style="margin-top:10px;border-top:1px solid var(--line);padding-top:8px">
+      <span><b>الإجمالي الفعلي هذا الشهر</b></span><b id="e_total" class="big"></b>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>⚖️ مقارنة الفعلي بالخطة الشهرية</h2>
+    <div id="e_compare"></div>
+  </div>
+
+  <div class="card">
+    <h2>💡 نصائح عملية على ضوء النتائج</h2>
+    <div id="e_advice"></div>
+  </div>
+</div>
+
 <!-- ================= REPORT ================= -->
 <div id="tab-report" class="tabview" style="display:none">
   <div class="card">
@@ -202,6 +250,109 @@ footer{text-align:center;color:var(--sub);font-size:11.5px;margin:18px 0 8px}
 <script>
 const STORE_KEY='budget_app_state_v1';
 const ARCHIVE_KEY='budget_app_archive_v1';
+const EXPENSES_KEY='budget_app_expenses_v1';
+
+const CAT_LABELS={home:'المنزل',bread:'خبز ومخبوزات',grocery:'مواد غذائية',veg:'خضر',meat:'لحم',drinks:'مشروبات',transport:'نقل',cafe:'مقهى',school:'أدوات دراسية'};
+// ربط أبواب النفقات الفعلية بأبواب الخطة المخططة (خطة سداد الدين)
+const CAT_PLAN_MAP={home:'d_bills',bread:'d_grocery',grocery:'d_grocery',veg:'d_veg',meat:'d_meat',drinks:'d_grocery',transport:'d_transport',cafe:null,school:'d_bills'};
+
+function loadExpenses(){try{return JSON.parse(localStorage.getItem(EXPENSES_KEY)||'[]');}catch(e){return [];}}
+function saveExpenses(arr){try{localStorage.setItem(EXPENSES_KEY,JSON.stringify(arr));}catch(e){console.error('expenses save failed',e);}}
+function currentMonthStr(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
+
+function addExpense(){
+  const date=document.getElementById('e_date').value||new Date().toISOString().slice(0,10);
+  const cat=document.getElementById('e_cat').value;
+  const amount=parseFloat(document.getElementById('e_amount').value)||0;
+  const note=document.getElementById('e_note').value.trim();
+  if(amount<=0){alert('أدخل مبلغًا صحيحًا');return;}
+  const arr=loadExpenses();
+  arr.push({id:Date.now().toString(36),date,cat,amount,note});
+  saveExpenses(arr);
+  document.getElementById('e_amount').value='';
+  document.getElementById('e_note').value='';
+  renderExpenses();
+}
+function deleteExpense(id){
+  const arr=loadExpenses().filter(e=>e.id!==id);
+  saveExpenses(arr);
+  renderExpenses();
+}
+function renderExpenses(){
+  const month=document.getElementById('e_month').value||currentMonthStr();
+  const all=loadExpenses();
+  const items=all.filter(e=>e.date && e.date.slice(0,7)===month).sort((a,b)=>a.date.localeCompare(b.date));
+
+  const listBox=document.getElementById('e_list');
+  if(!items.length){listBox.innerHTML='لا توجد نفقات مسجّلة لهذا الشهر.';}
+  else{
+    let html='';
+    items.slice().reverse().forEach(e=>{
+      html+='<div class="report-line" style="display:flex;justify-content:space-between;align-items:center;gap:6px">';
+      html+='<span>'+e.date+' — '+CAT_LABELS[e.cat]+(e.note?' ('+e.note+')':'')+'</span>';
+      html+='<span style="display:flex;align-items:center;gap:6px"><b>'+fmt(e.amount)+'</b>';
+      html+='<button class="btn no-print" style="padding:3px 7px;font-size:11px" onclick="deleteExpense(\''+e.id+'\')">حذف</button></span>';
+      html+='</div>';
+    });
+    listBox.innerHTML=html;
+  }
+
+  const byCat={};
+  Object.keys(CAT_LABELS).forEach(c=>byCat[c]=0);
+  let total=0;
+  items.forEach(e=>{byCat[e.cat]+=e.amount;total+=e.amount;});
+  document.getElementById('e_total').textContent=fmt(total);
+
+  // مقارنة بالخطة
+  const byPlan={};
+  Object.keys(CAT_LABELS).forEach(c=>{
+    const planId=CAT_PLAN_MAP[c];
+    const key=planId||'unplanned';
+    byPlan[key]=(byPlan[key]||0)+byCat[c];
+  });
+  const plannedTotals={d_veg:num('d_veg'),d_meat:num('d_meat'),d_grocery:num('d_grocery'),d_transport:num('d_transport'),d_bills:num('d_bills')};
+  const plannedLabels={d_veg:'خضر وفواكه',d_meat:'لحوم',d_grocery:'مواد غذائية (شامل خبز ومشروبات)',d_transport:'نقل',d_bills:'فواتير وأخرى (شامل المنزل وأدوات دراسية)'};
+
+  let cmp='';
+  Object.keys(plannedLabels).forEach(pid=>{
+    const actual=byPlan[pid]||0;
+    const planned=plannedTotals[pid];
+    const diff=actual-planned;
+    const cls=diff>0?'danger':'ok';
+    cmp+='<div class="report-line"><b>'+plannedLabels[pid]+'</b>: الفعلي '+fmt(actual)+' / المخطط '+fmt(planned)+
+         ' — <span class="'+cls+'">'+(diff>0?'تجاوز بـ '+fmt(diff):'ضمن الخطة (فائض '+fmt(-diff)+')')+'</span></div>';
+  });
+  const unplanned=byPlan['unplanned']||0;
+  cmp+='<div class="report-line accent2"><b>مصاريف غير مخططة (مقهى)</b>: '+fmt(unplanned)+' — هذا البند بالكامل خارج الميزانية المرصودة</div>';
+  const plannedBasicsTotal=Object.values(plannedTotals).reduce((a,b)=>a+b,0);
+  const overallDiff=total-plannedBasicsTotal;
+  cmp+='<hr style="border:none;border-top:1px solid var(--line);margin:8px 0">';
+  cmp+='<div class="report-line"><b>الإجمالي الفعلي مقابل مجموع أبواب النفقات الأساسية المخططة</b>: '+fmt(total)+' / '+fmt(plannedBasicsTotal)+
+       ' — <span class="'+(overallDiff>0?'danger':'ok')+'">'+(overallDiff>0?'عجز محتمل قدره '+fmt(overallDiff):'وفر قدره '+fmt(-overallDiff))+'</span></div>';
+  document.getElementById('e_compare').innerHTML=cmp;
+
+  // نصائح
+  const advice=[];
+  if(unplanned>3000){
+    advice.push('☕ صرف المقهى بلغ '+fmt(unplanned)+' وهو بند غير مخطط بالكامل — خفّضه فورًا وحوّل قيمته لدفعة سداد الدين، فهذا أسرع طريق لتقليص المدة دون المساس بالضروريات.');
+  }
+  if(overallDiff>0){
+    advice.push('⚠️ هناك عجز فعلي قدره '+fmt(overallDiff)+' هذا الشهر مقارنة بالخطة، ما قد يضطرك لتأخير دفعة الدين أو السحب من الادخار — راجع الأبواب المتجاوزة أعلاه بالأولوية.');
+  }else{
+    advice.push('✅ إنفاقك الفعلي هذا الشهر ضمن حدود الخطة (وفر '+fmt(-overallDiff)+') — يمكنك تحويل هذا الفائض لزيادة دفعة سداد الدين وتقصير المدة.');
+  }
+  if((byPlan['d_grocery']||0)>plannedTotals.d_grocery*1.15 && plannedTotals.d_grocery>0){
+    advice.push('🛒 المواد الغذائية (شاملة الخبز والمشروبات) تجاوزت الخطة بأكثر من 15% — جرّب الشراء بالجملة أسبوعيًا بدل الشراء اليومي المتكرر، فهو يقلل الإنفاق العشوائي.');
+  }
+  if((byPlan['d_meat']||0)>plannedTotals.d_meat*1.15 && plannedTotals.d_meat>0){
+    advice.push('🥩 صرف اللحوم مرتفع — خطط لوجبات أسبوعية ثابتة بديلة (بقوليات، دجاج) يومين إلى ثلاثة في الأسبوع لخفض الكلفة دون التأثير على التغذية.');
+  }
+  if((byPlan['d_transport']||0)>plannedTotals.d_transport*1.15 && plannedTotals.d_transport>0){
+    advice.push('🚌 مصروف النقل تجاوز الخطة — إن أمكن اعتماد وسائل نقل جماعية أو تنظيم التنقلات في رحلة واحدة يوميًا بدل عدة رحلات متفرقة.');
+  }
+  if(!advice.length)advice.push('لا توجد نفقات كافية مسجلة بعد لهذا الشهر لتحليل دقيق — واصل التسجيل اليومي.');
+  document.getElementById('e_advice').innerHTML=advice.map(a=>'<div class="report-line">'+a+'</div>').join('');
+}
 
 function loadArchive(){
   try{return JSON.parse(localStorage.getItem(ARCHIVE_KEY)||'[]');}catch(e){return [];}
@@ -363,10 +514,11 @@ function renderReport(){
   document.title='تقرير '+monthName+' - مسيّر الميزانية';
 }
 
-function renderAll(){renderDebt();renderPerm();renderReport();renderArchive();saveState();}
+function renderAll(){renderDebt();renderPerm();renderReport();renderArchive();renderExpenses();saveState();}
 
 document.querySelectorAll('input').forEach(el=>el.addEventListener('input',renderAll));
 
+document.getElementById('e_month').addEventListener('change', renderExpenses);
 document.querySelectorAll('.tab').forEach(tab=>{
   tab.addEventListener('click',()=>{
     document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
@@ -383,6 +535,7 @@ function backupData(){
     allIds.forEach(id=>state[id]=document.getElementById(id).value);
     state['r_month']=document.getElementById('r_month').value;
     state['_archive']=loadArchive();
+    state['_expenses']=loadExpenses();
     const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a');
@@ -405,6 +558,7 @@ document.getElementById('restoreFile').addEventListener('change',function(e){
         if(el)el.value=state[id];
       });
       if(Array.isArray(state['_archive']))saveArchive(state['_archive']);
+      if(Array.isArray(state['_expenses']))saveExpenses(state['_expenses']);
       renderAll();
       alert('تمت الاستعادة بنجاح');
     }catch(err){alert('ملف غير صالح');}
@@ -413,6 +567,8 @@ document.getElementById('restoreFile').addEventListener('change',function(e){
 });
 
 loadState();
+document.getElementById('e_date').value=new Date().toISOString().slice(0,10);
+document.getElementById('e_month').value=currentMonthStr();
 renderAll();
 
 if('serviceWorker' in navigator){
